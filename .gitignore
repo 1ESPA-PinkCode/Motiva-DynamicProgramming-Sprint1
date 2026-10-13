@@ -1,0 +1,7 @@
+# Dados da Motiva — não enviar ao GitHub
+/dados/
+/ranking_preliminar.csv
+
+# Arquivos temporários do Python
+__pycache__/
+*.pyc
