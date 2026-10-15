@@ -1,0 +1,35 @@
+{
+  "fonte": "Elaborado pelo grupo. Estacoes da Linha 4-Amarela; siglas iguais as do dataset da Motiva. Tempos em minutos sao estimativas; coordenadas aproximadas (Google Maps).",
+  "base": "BASE",
+  "estacoes": [
+    {"sigla": "BASE", "nome": "Patio Vila Sonia (base de manutencao)", "lat": -23.6010, "lon": -46.7415},
+    {"sigla": "TVS",  "nome": "Terminal Vila Sonia",    "lat": -23.5995, "lon": -46.7380},
+    {"sigla": "VSO",  "nome": "Vila Sonia",             "lat": -23.5986, "lon": -46.7360},
+    {"sigla": "MBI",  "nome": "Sao Paulo-Morumbi",      "lat": -23.5858, "lon": -46.7232},
+    {"sigla": "BUT",  "nome": "Butanta",                "lat": -23.5719, "lon": -46.7083},
+    {"sigla": "PIN",  "nome": "Pinheiros",              "lat": -23.5672, "lon": -46.7020},
+    {"sigla": "FAL",  "nome": "Faria Lima",             "lat": -23.5674, "lon": -46.6936},
+    {"sigla": "FRA",  "nome": "Fradique Coutinho",      "lat": -23.5663, "lon": -46.6841},
+    {"sigla": "FRE",  "nome": "Oscar Freire",           "lat": -23.5617, "lon": -46.6722},
+    {"sigla": "PTA",  "nome": "Paulista",               "lat": -23.5553, "lon": -46.6622},
+    {"sigla": "HIG",  "nome": "Higienopolis-Mackenzie", "lat": -23.5487, "lon": -46.6519},
+    {"sigla": "REP",  "nome": "Republica",              "lat": -23.5442, "lon": -46.6425},
+    {"sigla": "LUZ",  "nome": "Luz",                    "lat": -23.5365, "lon": -46.6336}
+  ],
+  "trechos": [
+    {"de": "BASE", "para": "VSO", "minutos": 5,  "meio": "a pe"},
+    {"de": "TVS",  "para": "VSO", "minutos": 3,  "meio": "a pe"},
+    {"de": "VSO",  "para": "MBI", "minutos": 3,  "meio": "trem"},
+    {"de": "MBI",  "para": "BUT", "minutos": 3,  "meio": "trem"},
+    {"de": "BUT",  "para": "PIN", "minutos": 2,  "meio": "trem"},
+    {"de": "PIN",  "para": "FAL", "minutos": 2,  "meio": "trem"},
+    {"de": "FAL",  "para": "FRA", "minutos": 2,  "meio": "trem"},
+    {"de": "FRA",  "para": "FRE", "minutos": 2,  "meio": "trem"},
+    {"de": "FRE",  "para": "PTA", "minutos": 2,  "meio": "trem"},
+    {"de": "PTA",  "para": "HIG", "minutos": 2,  "meio": "trem"},
+    {"de": "HIG",  "para": "REP", "minutos": 2,  "meio": "trem"},
+    {"de": "REP",  "para": "LUZ", "minutos": 2,  "meio": "trem"},
+    {"de": "BASE", "para": "BUT", "minutos": 18, "meio": "viatura"},
+    {"de": "BASE", "para": "PIN", "minutos": 22, "meio": "viatura"}
+  ]
+}

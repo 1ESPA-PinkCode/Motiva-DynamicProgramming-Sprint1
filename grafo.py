@@ -1,289 +1,228 @@
-from collections import deque
+"""
+Rede de estações da Linha 4-Amarela como grafo.
+
+Vértices: estações (identificadas pela sigla do dataset) + base de manutenção.
+Arestas: trechos, com peso em minutos de deslocamento.
+
+Algoritmos:
+- BFS: caminho com menos trechos
+- Dijkstra: caminho com menor tempo
+- A*: menor tempo, usando uma heurística de distância em linha reta
+"""
+
 import heapq
- 
- 
+import json
+import math
+from collections import deque
+from pathlib import Path
+
+
 # ============================================================
-# 1. ESTACOES E BASE DE MANUTENCAO
+# 1. LEITURA DA REDE (JSON -> LISTA DE ADJACÊNCIA)
 # ============================================================
- 
-ESTACOES = [
-    "Vila Sonia",
-    "Sao Paulo-Morumbi",
-    "Butanta",
-    "Pinheiros",
-    "Faria Lima",
-    "Fradique Coutinho",
-    "Oscar Freire",
-    "Paulista",
-    "Higienopolis-Mackenzie",
-    "Republica",
-    "Luz"
-]
- 
-BASE = "Patio de Manutencao Vila Sonia"
- 
-# Tempos ilustrativos para testar os algoritmos.
-# Substituir por tempos validados antes da entrega final.
-TEMPOS_EXEMPLO = [4, 3, 5, 4, 3, 4, 5, 4, 4, 6]
-TEMPO_BASE_VILA_SONIA = 5
- 
+
+def carregar_rede(arquivo):
+    """
+    Lê a rede de estações do arquivo JSON.
+
+    Retorna:
+        grafo: {sigla: {vizinho: minutos}}   (lista de adjacência)
+        estacoes: {sigla: {"nome", "lat", "lon"}}
+        base: sigla da base de manutenção
+    """
+    with open(arquivo, encoding="utf-8") as f:
+        dados = json.load(f)
+
+    estacoes = {e["sigla"]: e for e in dados["estacoes"]}
+    grafo = {sigla: {} for sigla in estacoes}
+
+    # Grafo não direcionado: o trecho vale nos dois sentidos
+    for t in dados["trechos"]:
+        grafo[t["de"]][t["para"]] = t["minutos"]
+        grafo[t["para"]][t["de"]] = t["minutos"]
+
+    return grafo, estacoes, dados["base"]
+
+
+GRAFO, ESTACOES, BASE = carregar_rede(
+    Path(__file__).parent / "rede" / "rede_estacoes.json"
+)
+
+
 # ============================================================
-# 2. CRIACAO DO GRAFO
+# 2. FUNÇÕES AUXILIARES
 # ============================================================
- 
-REDE = {estacao: {} for estacao in ESTACOES}
-REDE[BASE] = {}
- 
-REDE[BASE]["Vila Sonia"] = TEMPO_BASE_VILA_SONIA
-REDE["Vila Sonia"][BASE] = TEMPO_BASE_VILA_SONIA
- 
-for i in range(len(ESTACOES) - 1):
-    origem = ESTACOES[i]
-    destino = ESTACOES[i + 1]
-    tempo = TEMPOS_EXEMPLO[i]
- 
-    REDE[origem][destino] = tempo
-    REDE[destino][origem] = tempo
- 
- 
-# ============================================================
-# 3. BFS - CAMINHO COM MENOS TRECHOS
-# ============================================================
- 
-def bfs(origem, destino):
-    """Retorna o caminho com menor quantidade de arestas."""
- 
-    if origem not in REDE or destino not in REDE:
+
+def reconstruir_rota(anterior, destino):
+    """Volta do destino até a origem seguindo o 'anterior' de cada vértice."""
+    if destino not in anterior:
         return []
- 
+    rota = []
+    atual = destino
+    while atual is not None:
+        rota.append(atual)
+        atual = anterior[atual]
+    return rota[::-1]
+
+
+def tempo_da_rota(rota):
+    """Soma os minutos de todos os trechos da rota."""
+    return sum(GRAFO[a][b] for a, b in zip(rota, rota[1:]))
+
+
+# ============================================================
+# 3. BFS - MENOS TRECHOS
+# ============================================================
+
+def bfs(origem, destino):
+    """
+    Busca em largura: encontra a rota com MENOS TRECHOS.
+    Não olha o tempo de cada trecho.
+    """
     fila = deque([origem])
-    anteriores = {origem: None}
- 
+    anterior = {origem: None}
+
     while fila:
         atual = fila.popleft()
- 
         if atual == destino:
             break
- 
-        for vizinho in REDE[atual]:
-            if vizinho not in anteriores:
-                anteriores[vizinho] = atual
+        for vizinho in GRAFO[atual]:
+            if vizinho not in anterior:
+                anterior[vizinho] = atual
                 fila.append(vizinho)
- 
-    if destino not in anteriores:
-        return []
- 
-    caminho = []
-    atual = destino
- 
-    while atual is not None:
-        caminho.append(atual)
-        atual = anteriores[atual]
- 
-    return caminho[::-1]
- 
- 
+
+    return reconstruir_rota(anterior, destino)
+
+
 # ============================================================
-# 4. DIJKSTRA - MENOR TEMPO DE DESLOCAMENTO
+# 4. DIJKSTRA - MENOR TEMPO
 # ============================================================
- 
-def dijkstra(origem):
-    """Calcula as menores distâncias e reconstrói todas as rotas."""
- 
-    if origem not in REDE:
-        raise ValueError(f"Origem inexistente no grafo: {origem}")
- 
-    distancias = {
-        estacao: float("inf")
-        for estacao in REDE
-    }
- 
-    anteriores = {
-        estacao: None
-        for estacao in REDE
-    }
- 
-    distancias[origem] = 0
+
+def dijkstra(origem, destino=None):
+    """
+    Menor tempo da origem até cada vértice.
+
+    Se 'destino' for informado, para quando chegar nele
+    (usado para comparar com o A*).
+
+    Retorna: (tempos, anterior, nos_visitados)
+    """
+    tempos = {v: math.inf for v in GRAFO}
+    tempos[origem] = 0
+    anterior = {origem: None}
     fila = [(0, origem)]
- 
+    visitados = 0
+
     while fila:
-        distancia, atual = heapq.heappop(fila)
- 
-        if distancia > distancias[atual]:
-            continue
- 
-        for vizinho, tempo in REDE[atual].items():
-            nova_distancia = distancia + tempo
- 
-            if nova_distancia < distancias[vizinho]:
-                distancias[vizinho] = nova_distancia
-                anteriores[vizinho] = atual
- 
-                heapq.heappush(
-                    fila,
-                    (nova_distancia, vizinho)
-                )
- 
-    rotas = {}
- 
-    for destino in REDE:
-        if distancias[destino] == float("inf"):
-            rotas[destino] = []
-            continue
- 
-        caminho = []
-        atual = destino
- 
-        while atual is not None:
-            caminho.append(atual)
-            atual = anteriores[atual]
- 
-        rotas[destino] = caminho[::-1]
- 
-    return distancias, rotas
- 
- 
+        tempo_atual, atual = heapq.heappop(fila)
+        if tempo_atual > tempos[atual]:
+            continue  # entrada antiga da fila, já achamos caminho melhor
+        visitados += 1
+        if atual == destino:
+            break
+        for vizinho, minutos in GRAFO[atual].items():
+            novo_tempo = tempo_atual + minutos
+            if novo_tempo < tempos[vizinho]:
+                tempos[vizinho] = novo_tempo
+                anterior[vizinho] = atual
+                heapq.heappush(fila, (novo_tempo, vizinho))
+
+    return tempos, anterior, visitados
+
+
 # ============================================================
-# 5. A* - BUSCA COM HEURISTICA
+# 5. A* - MENOR TEMPO COM HEURÍSTICA
 # ============================================================
- 
+
+def distancia_km(a, b):
+    """
+    Distância aproximada em linha reta entre duas estações.
+    1 grau de latitude ≈ 111 km; a longitude encolhe com o cosseno da latitude.
+    """
+    lat_media = math.radians((ESTACOES[a]["lat"] + ESTACOES[b]["lat"]) / 2)
+    dy = (ESTACOES[a]["lat"] - ESTACOES[b]["lat"]) * 111
+    dx = (ESTACOES[a]["lon"] - ESTACOES[b]["lon"]) * 111 * math.cos(lat_media)
+    return math.sqrt(dx ** 2 + dy ** 2)
+
+
+# Velocidade do trecho mais rápido da rede (km por minuto)
+VELOCIDADE_MAXIMA = max(
+    distancia_km(a, b) / minutos
+    for a in GRAFO
+    for b, minutos in GRAFO[a].items()
+)
+
+
+def heuristica(estacao, destino):
+    """
+    Estimativa otimista do tempo restante:
+    distância em linha reta / velocidade do trecho mais rápido.
+
+    Nunca passa do tempo real (heurística ADMISSÍVEL), porque
+    nenhum caminho é mais curto que a linha reta e nenhum trecho
+    é mais rápido que VELOCIDADE_MAXIMA. Por isso o A* acha
+    sempre o mesmo tempo ótimo que o Dijkstra.
+    """
+    return distancia_km(estacao, destino) / VELOCIDADE_MAXIMA
+
+
 def astar(origem, destino):
     """
-    Encontra uma rota de menor custo usando A*.
- 
-    A heuristica utiliza a distancia em numero de trechos
-    ate o destino multiplicada pelo menor peso de aresta.
-    Como o grafo atual e linear, ela e admissivel para as
-    estacoes dessa linha.
+    A*: igual ao Dijkstra, mas a fila é ordenada por
+    tempo_ate_aqui + heuristica (estimativa do que falta).
+
+    Retorna: (tempo, rota, nos_visitados)
     """
- 
-    if origem not in REDE or destino not in REDE:
-        return float("inf"), []
- 
-    if origem == destino:
-        return 0, [origem]
- 
-    menor_tempo = min(
-        tempo
-        for vizinhos in REDE.values()
-        for tempo in vizinhos.values()
-    )
- 
-    # Posicao das estacoes na linha.
-    posicoes = {
-        estacao: i
-        for i, estacao in enumerate(ESTACOES)
-    }
- 
-    def heuristica(estacao):
-        # A base fica imediatamente antes de Vila Sonia
-        # no modelo usado para este teste.
-        if estacao == BASE:
-            posicao_atual = -1
-        else:
-            posicao_atual = posicoes[estacao]
- 
-        if destino == BASE:
-            posicao_destino = -1
-        else:
-            posicao_destino = posicoes[destino]
- 
-        quantidade_trechos = abs(
-            posicao_atual - posicao_destino
-        )
- 
-        return quantidade_trechos * menor_tempo
- 
-    fila = [(heuristica(origem), 0, origem)]
-    anteriores = {origem: None}
-    custos = {origem: 0}
- 
+    tempos = {origem: 0}
+    anterior = {origem: None}
+    fila = [(heuristica(origem, destino), origem)]
+    visitados = 0
+
     while fila:
-        _, custo_atual, atual = heapq.heappop(fila)
- 
-        if custo_atual > custos.get(atual, float("inf")):
-            continue
- 
+        _, atual = heapq.heappop(fila)
+        visitados += 1
         if atual == destino:
-            break
- 
-        for vizinho, tempo in REDE[atual].items():
-            novo_custo = custo_atual + tempo
- 
-            if novo_custo < custos.get(vizinho, float("inf")):
-                custos[vizinho] = novo_custo
-                anteriores[vizinho] = atual
- 
-                prioridade = novo_custo + heuristica(vizinho)
- 
-                heapq.heappush(
-                    fila,
-                    (prioridade, novo_custo, vizinho)
-                )
- 
-    if destino not in custos:
-        return float("inf"), []
- 
-    caminho = []
-    atual = destino
- 
-    while atual is not None:
-        caminho.append(atual)
-        atual = anteriores[atual]
- 
-    return custos[destino], caminho[::-1]
- 
- 
+            return tempos[destino], reconstruir_rota(anterior, destino), visitados
+        for vizinho, minutos in GRAFO[atual].items():
+            novo_tempo = tempos[atual] + minutos
+            if novo_tempo < tempos.get(vizinho, math.inf):
+                tempos[vizinho] = novo_tempo
+                anterior[vizinho] = atual
+                prioridade = novo_tempo + heuristica(vizinho, destino)
+                heapq.heappush(fila, (prioridade, vizinho))
+
+    return math.inf, [], visitados
+
+
 # ============================================================
-# 6. TESTES E COMPARACAO DOS ALGORITMOS
+# 6. TESTES
 # ============================================================
- 
+
 if __name__ == "__main__":
- 
-    print("=== DIJKSTRA: MENOR TEMPO DESDE A BASE ===")
- 
-    distancias, rotas = dijkstra(BASE)
- 
-    for estacao in ESTACOES:
-        print(f"\nDestino: {estacao}")
-        print(f"Tempo ilustrativo: {distancias[estacao]} minutos")
-        print("Rota:", " -> ".join(rotas[estacao]))
- 
-    destino = "Luz"
- 
-    print("\n=== BFS: MENOR NUMERO DE TRECHOS ===")
- 
-    rota_bfs = bfs(BASE, destino)
-    print("Rota:", " -> ".join(rota_bfs))
-    print(f"Quantidade de trechos: {len(rota_bfs) - 1}")
- 
-    print("\n=== A*: ROTA ATE LUZ ===")
- 
-    custo_astar, rota_astar = astar(BASE, destino)
- 
-    print(f"Tempo ilustrativo: {custo_astar} minutos")
-    print("Rota:", " -> ".join(rota_astar))
- 
-    print("\n=== COMPARACAO: DIJKSTRA X A* ===")
- 
-    print(f"Dijkstra: {distancias[destino]} minutos")
-    print(f"A*: {custo_astar} minutos")
-    print("Mesmo custo?", distancias[destino] == custo_astar)
- 
-    print("\n=== VALIDACAO DE TODAS AS ESTACOES ===")
- 
-    for estacao in ESTACOES:
-        custo, rota = astar(BASE, estacao)
- 
-        correto = custo == distancias[estacao]
- 
-        print(
-            f"{estacao}: "
-            f"Dijkstra={distancias[estacao]} min | "
-            f"A*={custo} min | "
-            f"Correto={correto}"
-        )
- 
-        assert correto, f"Divergencia entre algoritmos: {estacao}"
- 
-    print("\nTodos os testes de custo passaram.")
+    print("=== LISTA DE ADJACÊNCIA ===")
+    for v, vizinhos in GRAFO.items():
+        print(f"{v:>5}: {vizinhos}")
+
+    print("\n=== BFS x DIJKSTRA (SAINDO DA BASE) ===")
+    tempos, anterior, _ = dijkstra(BASE)
+    for est in GRAFO:
+        if est == BASE:
+            continue
+        r_bfs = bfs(BASE, est)
+        r_dij = reconstruir_rota(anterior, est)
+        print(f"{est}: BFS {len(r_bfs)-1} trechos/{tempo_da_rota(r_bfs)} min "
+              f"({' > '.join(r_bfs)}) | Dijkstra {len(r_dij)-1} trechos/"
+              f"{tempos[est]} min ({' > '.join(r_dij)})")
+
+    print("\n=== DIJKSTRA x A* (SAINDO DE PAULISTA) ===")
+    total_dij = total_astar = 0
+    for est in GRAFO:
+        if est == "PTA":
+            continue
+        t_dij, _, vis_dij = dijkstra("PTA", est)
+        t_astar, _, vis_astar = astar("PTA", est)
+        assert t_astar == t_dij[est]  # mesmo tempo ótimo
+        total_dij += vis_dij
+        total_astar += vis_astar
+        print(f"{est}: {t_astar} min | visitados Dijkstra={vis_dij}  A*={vis_astar}")
+    print(f"TOTAL visitados: Dijkstra={total_dij}  A*={total_astar}")
